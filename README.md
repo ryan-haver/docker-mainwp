@@ -97,6 +97,16 @@ Refer to the [official WordPress image docs](https://hub.docker.com/_/wordpress)
 - When using docker compose, create a `.env` file and add `WORDPRESS_TAG=6.6.3-php8.2-apache` (or any official tag). Compose injects that value into the build arg automatically thanks to `${WORDPRESS_TAG:-...}` in the file.
 - For the standalone Dockerfile, pass `--build-arg WORDPRESS_TAG=latest` during `docker build` to pin or track specific versions.
 
+## Continuous builds
+
+The workflow at `.github/workflows/auto-build.yml` checks the official WordPress release feed every morning (06:30 UTC). When it detects a new core version it:
+
+- Builds this image with `WORDPRESS_TAG=<version>-php8.2-apache`.
+- Publishes the result to GitHub Container Registry (`ghcr.io/<your-account>/wordpress-manager-mainwp:<version>` and the rolling `latest` tag).
+- Skips the build entirely if the tag has already been produced, thanks to a simple cache marker stored in the repository workspace.
+
+You can also trigger the workflow on demand from the Actions tab (look for **Build Latest WordPress Image**). If you prefer Docker Hub, add `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets and extend the workflow to log in to that registry as well.
+
 ## Useful commands
 
 - **View logs:** `docker compose logs -f mainwp`

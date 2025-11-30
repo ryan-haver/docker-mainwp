@@ -1,0 +1,80 @@
+name: Build Latest WordPress Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["master", "main"]
+  schedule:
+    - cron: "30 6 * * *"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  WP_FLAVOR: php8.2-apache
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/wordpress-manager-mainwp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine latest WordPress version
+        id: wp
+        run: |
+          set -euo pipefail
+          latest=$(curl -fsSL https://api.wordpress.org/core/version-check/1.7/ | jq -r '.offers[0].current')
+          tag="${latest}-${WP_FLAVOR}"
+          echo "version=${latest}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if version already built
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .wp-build-cache
+          key: wp-${{ steps.wp.outputs.tag }}
+
+      - name: Set up QEMU
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            WORDPRESS_TAG=${{ steps.wp.outputs.tag }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.wp.outputs.tag }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Record built version
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .wp-build-cache
+          echo "${{ steps.wp.outputs.tag }}" > .wp-build-cache/latest
+
+      - name: Summarize run
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" = "true" ]; then
+            echo "Latest version already built: ${{ steps.wp.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Built and pushed image for tag ${{ steps.wp.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
