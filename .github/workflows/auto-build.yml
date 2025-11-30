@@ -78,3 +78,4 @@ jobs:
             echo "Latest version already built: ${{ steps.wp.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Built and pushed image for tag ${{ steps.wp.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
